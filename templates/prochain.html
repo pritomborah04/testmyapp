@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NSE Option Chain Analyzer</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter','Segoe UI',sans-serif;background:#f8fafc;color:#1e293b;font-size:13px;overflow:hidden;height:100vh}
+
+.app{display:flex;flex-direction:column;height:100vh;padding:5px 6px;gap:4px;margin-left:200px}
+@media(max-width:768px){.app{margin-left:0}}
+
+.ctrl{display:flex;align-items:center;gap:5px;background:#fff;padding:6px 12px;border-radius:10px;border:1px solid #e2e8f0;flex-wrap:wrap}
+.ctrl label{color:#64748b;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.3px}
+.ctrl select,.ctrl input{background:#f8fafc;color:#1e293b;border:1px solid #e2e8f0;padding:4px 6px;border-radius:6px;font-size:11px;outline:none;transition:all .2s;min-height:26px}
+.ctrl select:hover,.ctrl input:hover{border-color:#6366f1}
+.ctrl select:focus,.ctrl input:focus{border-color:#6366f1;box-shadow:0 0 0 2px rgba(99,102,241,0.15)}
+.ctrl select{min-width:95px;cursor:pointer;appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%2364748b'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center;padding-right:24px}
+.ctrl input[type=number]{width:85px;-moz-appearance:textfield}
+.ctrl input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+.ctrl button{background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all .2s;letter-spacing:0.3px}
+.ctrl button:hover{background:linear-gradient(135deg,#818cf8,#6366f1);transform:translateY(-1px);box-shadow:0 4px 12px rgba(99,102,241,0.25)}
+.ctrl .mode-btn{background:linear-gradient(135deg,#f43f5e,#e11d48);color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;transition:all .2s;letter-spacing:0.3px}
+.ctrl .mode-btn:hover{background:linear-gradient(135deg,#fb7185,#f43f5e);transform:translateY(-1px);box-shadow:0 4px 12px rgba(244,63,94,0.25)}
+.hamburger{background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;padding:2px 8px;border-radius:6px;transition:all .2s;display:none;align-items:center}
+.hamburger:hover{background:#f1f5f9;color:#1e293b}
+.hamburger.show{display:flex}
+.overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.35);z-index:99}
+.overlay.show{display:block}
+.sidebar{position:fixed;top:0;left:0;width:200px;height:100%;background:#fff;z-index:100;padding:0;display:flex;flex-direction:column;transition:left .25s ease;box-shadow:2px 0 15px rgba(0,0,0,0.1)}
+@media(max-width:768px){.sidebar{left:-260px}.sidebar.open{left:0}}
+.sidebar .head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid #e2e8f0}
+.sidebar .head span{font-weight:700;font-size:14px;color:#1e293b}
+.sidebar .head button{background:none;border:none;font-size:16px;color:#64748b;cursor:pointer;padding:2px 6px;border-radius:6px}
+.sidebar .head button:hover{background:#f1f5f9}
+.sidebar a{display:flex;align-items:center;gap:10px;padding:12px 16px;color:#475569;text-decoration:none;font-size:13px;font-weight:500;border-left:3px solid transparent;transition:all .15s}
+.sidebar a:hover{background:#f8fafc;color:#6366f1;border-left-color:#6366f1}
+.sidebar a.active{background:#eef2ff;color:#6366f1;border-left-color:#6366f1;font-weight:600}
+.sidebar a .icon{font-size:16px;width:20px;text-align:center}
+
+.status{display:flex;gap:10px;align-items:center;background:#fff;padding:5px 12px;border-radius:10px;border:1px solid #e2e8f0;flex-wrap:wrap}
+.status .lbl{color:#94a3b8;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.3px}
+.status .val{padding:2px 8px;border-radius:6px;background:#f1f5f9;min-width:48px;text-align:center;font-weight:700;font-size:12px;border:1px solid #e2e8f0}
+.status .val.spot{color:#1e293b;border-color:#c7d2fe}
+.status .val.green{background:#dcfce7;color:#166534;border-color:#86efac}
+.status .val.red{background:#fce4ec;color:#c62828;border-color:#ef9a9a}
+.status .ts{color:#94a3b8;font-size:11px;margin-left:auto}
+
+.body{display:flex;flex:1;gap:6px;min-height:0}
+.main{flex:1;max-width:850px;display:flex;flex-direction:column;gap:5px;min-width:0}
+
+.table-wrap{flex:1;overflow:auto;background:#fff;border-radius:10px;border:1px solid #e2e8f0;position:relative}
+.table-wrap table{border-collapse:separate;border-spacing:0;font-size:13px;font-family:'Inter','Segoe UI',sans-serif}
+.table-wrap th{position:sticky;top:0;background:#f8fafc;color:#64748b;padding:5px 3px;text-align:center;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;z-index:2;white-space:nowrap;border-bottom:2px solid #e2e8f0}
+.table-wrap td{padding:3px 3px;text-align:center;white-space:nowrap;border-bottom:1px solid #f1f5f9;transition:background .15s}
+.table-wrap tr.atm{background:#000!important}
+.table-wrap tr.atm td{background:#000!important;color:#fff!important;font-weight:700}
+.table-wrap tr.near td{background:#e2e8f0}
+.table-wrap td.num{text-align:center;font-variant-numeric:tabular-nums}
+.table-wrap tr:hover td{background:#f8fafc!important}
+.table-wrap tr.atm:hover td{background:#000!important;color:#fff!important}
+.table-wrap tr.near:hover td{background:#e2e8f0}
+
+.table-wrap th:first-child{border-radius:10px 0 0 0}
+.table-wrap th:last-child{border-radius:0 10px 0 0}
+.table-wrap::-webkit-scrollbar{width:5px;height:5px}
+.table-wrap::-webkit-scrollbar-track{background:transparent}
+.table-wrap::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px}
+.table-wrap::-webkit-scrollbar-thumb:hover{background:#94a3b8}
+
+.mid{width:320px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.right{width:240px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.right-panel{flex-shrink:0;border-radius:10px}
+.log-panel{flex:1;display:flex;flex-direction:column;background:#fff;border-radius:10px;border:1px solid #e2e8f0;min-height:0}
+.log-panel .title{padding:4px 8px;color:#64748b;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.4px;text-align:center;border-bottom:1px solid #e2e8f0}
+.log-panel .wrap{flex:1;overflow:auto}
+.log-panel table{border-collapse:separate;border-spacing:0;font-size:13px}
+.log-panel th{padding:3px 4px;color:#64748b;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.2px;border-bottom:1px solid #e2e8f0;position:sticky;top:0;background:#f8fafc;white-space:nowrap}
+.log-panel td{padding:2px 4px;border-bottom:1px solid #f1f5f9;text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap}
+.log-panel .wrap::-webkit-scrollbar{width:4px}
+.log-panel .wrap::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px}
+
+.bottom-panel{flex:1;background:#fff;border-radius:10px;border:1px solid #e2e8f0;min-width:0}
+.bottom-panel .title{padding:4px 8px;color:#64748b;font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.4px;text-align:center;border-bottom:1px solid #e2e8f0}
+.bottom-panel table{border-collapse:separate;border-spacing:0;font-size:13px}
+.bottom-panel th{padding:3px 5px;color:#64748b;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:0.2px;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+.bottom-panel td{padding:3px 5px;border-bottom:1px solid #f1f5f9;text-align:center;font-variant-numeric:tabular-nums;white-space:nowrap}
+.bottom-panel tr:last-child td{border-bottom:none}
+.fix-btn{background:#e2e8f0;border:none;padding:3px 14px;border-radius:4px;cursor:pointer;font-size:11px;color:#475569;font-weight:500}
+.fix-btn:hover{background:#cbd5e1}
+
+.sig-call-buy{background:#dcfce7!important;color:#166534!important;font-weight:700;border-radius:4px}
+.sig-call-sell{background:#fce4ec!important;color:#c62828!important;font-weight:700;border-radius:4px}
+.sig-put-buy{background:#dcfce7!important;color:#166534!important;font-weight:700;border-radius:4px}
+.sig-put-sell{background:#fce4ec!important;color:#c62828!important;font-weight:700;border-radius:4px}
+.sig-cover{background:#e8f5e9!important;color:#2e7d32!important;font-weight:600;border-radius:4px}
+.sig-unwind{background:#fff3e0!important;color:#e65100!important;font-weight:600;border-radius:4px}
+
+.loading{display:flex;align-items:center;justify-content:center;height:200px;color:#64748b;font-size:14px;font-weight:500}
+.loading::after{content:'';width:20px;height:20px;margin-left:10px;border:2px solid #e2e8f0;border-top-color:#6366f1;border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.error{color:#dc2626;padding:20px;text-align:center;font-size:14px}
+
+@media(max-width:768px){
+body{overflow:auto;height:auto;font-size:13px}
+.app{height:auto;padding:4px;gap:4px}
+.ctrl{padding:5px 8px;gap:4px}
+.ctrl label{font-size:11px}
+.ctrl select,.ctrl input{font-size:14px;min-height:38px;padding:7px 9px}
+.ctrl select{min-width:85px}
+.ctrl input[type=number]{width:80px}
+.ctrl button,.ctrl .mode-btn{padding:8px 14px;font-size:14px;min-height:38px}
+.status{gap:6px;padding:5px 8px}
+.status .lbl{font-size:11px}
+.status .val{font-size:14px;padding:4px 10px;min-width:50px}
+.body{flex-direction:column}
+.main{max-width:none}
+.mid{width:100%;min-height:auto;max-height:none}
+.right{width:100%;min-height:auto;max-height:none}
+.bottom-panel .title{font-size:11px;padding:5px 8px}
+.bottom-panel th{font-size:11px;padding:4px 6px}
+.bottom-panel td{font-size:13px;padding:4px 6px}
+.table-wrap th{font-size:11px;padding:6px 4px}
+.table-wrap td{font-size:13px;padding:5px 4px}
+.log-panel{min-height:100px}
+.log-panel th{font-size:11px;padding:4px 6px}
+.log-panel td{font-size:13px;padding:4px 6px}
+.loading{height:120px;font-size:14px}
+}
+
+@media(max-width:480px){
+.app{padding:2px;gap:3px}
+.ctrl{gap:3px;padding:4px 6px}
+.ctrl label{font-size:10px}
+.ctrl select,.ctrl input{font-size:13px;min-height:34px;padding:6px 7px}
+.ctrl select{min-width:70px}
+.ctrl input[type=number]{width:70px}
+.ctrl button,.ctrl .mode-btn{padding:7px 12px;font-size:13px;min-height:34px}
+.status{gap:4px;padding:4px 6px}
+.status .lbl{font-size:10px}
+.status .val{font-size:13px;padding:3px 8px;min-width:42px}
+.main{max-width:none}
+.mid{width:100%;min-height:auto;max-height:none}
+.right{width:100%;min-height:auto;max-height:none}
+.table-wrap th{font-size:10px;padding:5px 3px}
+.table-wrap td{font-size:12px;padding:4px 3px}
+.bottom-panel th{font-size:10px}
+.bottom-panel td{font-size:12px}
+.log-panel th{font-size:10px}
+.log-panel td{font-size:12px}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="overlay" id="overlay"></div>
+    <div class="sidebar" id="sidebar">
+      <div class="head"><span>Navigation</span><button id="closeBtn">✕</button></div>
+      <a href="/" id="linkDash"><span class="icon">📈</span>Dashboard</a>
+      <a href="/prochain" class="active" id="linkPro"><span class="icon">📊</span>Pro Option Chain</a>
+      <a href="/indices" id="linkIndices"><span class="icon">📋</span>Indices</a>
+    <a href="/stocks" id="linkStocks"><span class="icon">💹</span>Stocks</a>
+    <a href="/adv-scan" id="linkAdvScan"><span class="icon">🔍</span>Adv Scan</a>
+  </div>
+  <div class="ctrl">
+    <button class="hamburger" id="hamburgerBtn">☰</button>
+    <button class="mode-btn" id="modeBtn">Index</button>
+    <label>Index:</label><select id="indexSel"></select>
+    <label>Stock:</label><select id="stockSel"></select>
+    <label>Expiry:</label><select id="expirySel"></select>
+    <label>Strike:</label><input type="number" id="strikeInput">
+    <label>Interval:</label><select id="intervalSel">
+      <option value="60">1 min</option><option value="120">2 min</option>
+      <option value="180">3 min</option><option value="300">5 min</option>
+    </select>
+    <button id="applyBtn">Apply</button>
+    <button id="refreshBtn">Refresh</button>
+    <span style="margin-left:auto;font-size:13px;color:#94a3b8" id="clockDisplay"></span>
+  </div>
+  <div class="status">
+    <span style="font-weight:700;color:#6366f1;font-size:11px;text-transform:uppercase;margin-right:6px">DATA</span>
+    <span class="lbl">Spot:</span><span class="val spot" id="spotVal">-</span>
+    <span class="lbl">VIX:</span><span class="val spot" id="vixVal">-</span>
+    <span class="lbl">MaxPain:</span><span class="val spot" id="mpVal">-</span>
+    <span class="lbl">PCR:</span><span class="val" id="pcrVal">-</span>
+    <span class="lbl">AI:</span><span class="val spot" id="aiDirVal">-</span>
+    <span class="lbl">Bias:</span><span class="val spot" id="aiBiasVal">-</span>
+    <span class="lbl">Signal:</span><span class="val spot" id="finalSignalVal">-</span>
+    <span class="lbl">15m:</span><span class="val spot" id="cross15mVal">-</span>
+    <span class="lbl" style="margin-left:6px">Advance:</span><span class="val green" id="advVal">-</span>
+    <span class="lbl">Decline:</span><span class="val red" id="decVal">-</span>
+  </div>
+  <div class="status" id="vwapAdxRow">
+    <span style="font-weight:700;color:#f59e0b;font-size:11px;text-transform:uppercase;margin-right:6px">INDICATOR</span>
+    <span class="lbl">VWAP:</span><span class="val spot" id="vwapVal">-</span>
+    <span class="lbl">EMA:</span><span class="val spot" id="emaVal">-</span>
+    <span class="lbl">ST:</span><span class="val spot" id="stVal">-</span>
+    <span class="lbl">ADX:</span><span class="val" id="adxVal">-</span>
+  </div>
+  <div class="body">
+    <div class="main">
+      <div class="table-wrap" id="tableWrap">
+        <div class="loading" id="loadingMsg">Select symbol &amp; expiry, click Apply</div>
+      </div>
+    </div>
+    <div class="mid">
+      <div class="log-panel">
+        <div class="title">Data Log</div>
+        <div class="wrap" id="logWrap"><table><tr><td style="color:#666">-</td></tr></table></div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="bottom-panel right-panel">
+        <div class="title">OI Build-up</div>
+        <div id="oiPanel"><table><tr><td style="color:#666">-</td></tr></table></div>
+      </div>
+      <div class="bottom-panel right-panel" id="aiPanel">
+        <div class="title">AI Market Direction</div>
+        <div id="aiSignalPanel" style="min-height:60px;padding:6px 8px">
+          <div style="text-align:center;color:#94a3b8">Load data...</div>
+        </div>
+      </div>
+      <div class="bottom-panel right-panel">
+        <div class="title">S/R Levels</div>
+        <div id="srPanel"><table><tr><td style="color:#666">-</td></tr></table></div>
+      </div>
+      <div class="bottom-panel right-panel">
+        <div class="title">IV Calculation</div>
+        <div id="ivPanel" style="min-height:70px"><table><tr><td style="color:#666">-</td></tr></table></div>
+        <div style="text-align:center;margin-top:5px">
+          <button id="setFixBtn" onclick="setIvFix()" class="fix-btn">Set Fix</button>
+        </div>
+      </div>
+      <div class="bottom-panel right-panel">
+        <div class="title">GIFT Nifty</div>
+        <div id="giftPanel" style="min-height:50px;display:flex;align-items:center;justify-content:center;gap:8px;flex-direction:column;padding:8px 0">
+          <div style="font-size:20px;font-weight:800;color:#1e293b" id="giftPrice">-</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <span style="font-size:12px;font-weight:600" id="giftChg">-</span>
+            <span style="font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px" id="giftPct">-</span>
+          </div>
+          <div style="font-size:9px;color:#94a3b8">USD Futures · NSE IX</div>
+          <div style="display:flex;gap:4px;align-items:center;border-top:1px solid #e2e8f0;padding-top:6px;width:100%;justify-content:center">
+            <span style="font-size:12px;font-weight:700;color:#64748b">VIX:</span>
+            <span style="font-size:18px;font-weight:800;color:#6366f1" id="giftVix">-</span>
+            <span style="font-size:14px;font-weight:700" id="giftVixChg">-</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+// ==================== SIDEBAR ====================
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('overlay');
+const app = document.querySelector('.app');
+const hamburger = document.getElementById('hamburgerBtn');
+function isMobile() { return window.innerWidth <= 768; }
+function toggleSidebar(open) {
+  if (!isMobile()) return;
+  sidebar.classList.toggle('open', open);
+  overlay.classList.toggle('show', open);
+  hamburger.classList.toggle('show', !open);
+}
+hamburger.addEventListener('click', () => toggleSidebar(!sidebar.classList.contains('open')));
+function closeSidebar() { toggleSidebar(false); }
+document.getElementById('closeBtn').addEventListener('click', closeSidebar);
+overlay.addEventListener('click', closeSidebar);
+['linkDash','linkPro','linkIndices','linkStocks','linkAdvScan'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    if (isMobile()) closeSidebar();
+    document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+    e.currentTarget.classList.add('active');
+  });
+});
+// on mobile, show hamburger by default
+if (isMobile()) hamburger.classList.add('show');
+window.addEventListener('resize', () => {
+  if (isMobile()) {
+    hamburger.classList.add('show');
+  } else {
+    hamburger.classList.remove('show');
+    sidebar.classList.remove('open');
+    overlay.classList.remove('show');
+  }
+});
+// ==================== STATE ====================
+let lastData = null;
+let lastFetchTime = 0;
+let lastLogTime = 0;
+
+let state = {
+  mode: 'Index', symbol: '', expiry: '', strike: 0,
+  interval: 180, timerId: null,
+  indices: [], stocks: [], dates: []
+};
+
+// ==================== NIFTY 50 ADV/DEC ====================
+async function fetchNiftyAdvDec() {
+  try {
+    const r = await fetch('/api/all-indices');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!Array.isArray(data)) return;
+    const nifty = data.find(d => d.index === 'NIFTY 50');
+    if (nifty) {
+      document.getElementById('advVal').textContent = nifty.advances || '-';
+      document.getElementById('decVal').textContent = nifty.declines || '-';
+    }
+  } catch(e) {}
+}
+// ==================== GIFT NIFTY + VIX ====================
+async function fetchGiftNifty() {
+  try {
+    const [giftR, vixR] = await Promise.all([
+      fetch('/api/gift-nifty'),
+      fetch('/api/vix')
+    ]);
+    if (giftR.ok) {
+      const d = await giftR.json();
+      if (d.last) {
+        document.getElementById('giftPrice').textContent = d.last.toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2});
+        const chg = d.change || 0;
+        const pct = d.percentChange || 0;
+        const cls = chg >= 0 ? 'green' : 'red';
+        const sign = chg > 0 ? '+' : '';
+        const el = document.getElementById('giftChg');
+        el.textContent = `${sign}${chg.toFixed(2)}`;
+        el.style.color = chg >= 0 ? '#166534' : '#c62828';
+        const pctEl = document.getElementById('giftPct');
+        pctEl.textContent = `${sign}${pct.toFixed(2)}%`;
+        pctEl.className = cls;
+        pctEl.style.background = chg >= 0 ? '#dcfce7' : '#fce4ec';
+        pctEl.style.color = chg >= 0 ? '#166534' : '#c62828';
+      }
+    }
+    if (vixR.ok) {
+      const vd = await vixR.json();
+      if (vd.vix != null) {
+        document.getElementById('giftVix').textContent = vd.vix.toFixed(2);
+        const vchg = vd.change || 0;
+        const vpct = vd.percentChange || 0;
+        const vCls = vchg >= 0 ? 'green' : 'red';
+        const vSign = vchg > 0 ? '+' : '';
+        const vEl = document.getElementById('giftVixChg');
+        vEl.textContent = `${vSign}${vchg.toFixed(2)} (${vSign}${vpct.toFixed(2)}%)`;
+        vEl.style.color = vchg >= 0 ? '#166534' : '#c62828';
+      }
+    }
+  } catch(e) {}
+}
+// ==================== API ====================
+function updateClock() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('clockDisplay').textContent =
+    `${pad(d.getDate())}-${months[d.getMonth()]}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+// Independent GIFT Nifty polling — every 2 seconds
+let giftIntervalId = setInterval(fetchGiftNifty, 10000);
+fetchGiftNifty();
+
+const api = async (path) => { const r=await fetch(path); return r.json(); };
+
+async function init() {
+  const d = await api('/api/init');
+  state.indices = d.indices; state.stocks = d.stocks;
+  document.getElementById('indexSel').innerHTML = d.indices.map(s => `<option>${s}</option>`).join('');
+  document.getElementById('stockSel').innerHTML = d.stocks.map(s => `<option>${s}</option>`).join('');
+  state.symbol = d.indices[0];
+  await fetchDates();
+  apply();
+}
+init();
+
+async function fetchDates() {
+  const mode = state.mode;
+  const sym = state.mode === 'Index' ? document.getElementById('indexSel').value : document.getElementById('stockSel').value;
+  state.symbol = sym;
+  const d = await api(`/api/dates?symbol=${sym}&mode=${mode}`);
+  const esel = document.getElementById('expirySel');
+  if (d.dates && d.dates.length) {
+    esel.innerHTML = d.dates.map(dt => `<option>${dt}</option>`).join('');
+    state.dates = d.dates;
+    state.expiry = d.dates[0];
+  }
+}
+
+async function detectAtmStrike() {
+  try {
+    const d = await api(`/api/data?symbol=${state.symbol}&expiry=${document.getElementById('expirySel').value}&mode=${state.mode}`);
+    if (d && d.table && d.table.length) {
+      const spot = d.spot;
+      let nearest = d.table[0].strike, minDiff = Math.abs(nearest - spot);
+      d.table.forEach(r => { const diff = Math.abs(r.strike - spot); if (diff < minDiff) { minDiff = diff; nearest = r.strike; } });
+      document.getElementById('strikeInput').value = nearest;
+    }
+  } catch(e) {}
+}
+async function scheduleNext() {
+  if (state.timerId) clearTimeout(state.timerId);
+  state.timerId = setTimeout(async () => {
+    try { await fetchData(); } catch(e) { console.error(e); }
+    if (!state.stopped) scheduleNext();
+  }, state.interval * 1000);
+}
+// Fallback interval — runs even when tab is inactive (browsers throttle setTimeout)
+let bgIntervalId = null;
+function startBgInterval() {
+  stopBgInterval();
+  bgIntervalId = setInterval(async () => {
+    const now = Date.now();
+    if (now - lastFetchTime > state.interval * 1000 * 1.5) {
+      try { await fetchData(); } catch(e) {}
+    }
+  }, state.interval * 1000);
+}
+function stopBgInterval() {
+  if (bgIntervalId) { clearInterval(bgIntervalId); bgIntervalId = null; }
+}
+
+async function apply() {
+  state.mode = document.getElementById('modeBtn').textContent;
+  state.symbol = state.mode === 'Index' ? document.getElementById('indexSel').value : document.getElementById('stockSel').value;
+  state.expiry = document.getElementById('expirySel').value;
+  let sp = parseInt(document.getElementById('strikeInput').value);
+  if (!sp) { await detectAtmStrike(); sp = parseInt(document.getElementById('strikeInput').value); }
+  if (!sp || !state.expiry) return;
+  state.strike = sp;
+  state.interval = parseInt(document.getElementById('intervalSel').value) || 120;
+  state.stopped = false;
+  if (state.timerId) { clearTimeout(state.timerId); state.timerId = null; }
+  stopBgInterval();
+  lastLogTime = 0;
+  document.getElementById('loadingMsg').textContent = 'Loading...';
+  await fetchData();
+  scheduleNext();
+  startBgInterval();
+}
+
+async function fetchData() {
+  try {
+    const d = await api(`/api/data?symbol=${state.symbol}&expiry=${state.expiry}&mode=${state.mode}`);
+    if (d.error) { document.getElementById('tableWrap').innerHTML = `<div class="error">${d.error}</div>`; return; }
+    lastData = d;
+    lastFetchTime = Date.now();
+    renderTable(d);
+    renderStatus(d);
+    renderOiBuildup(d);
+    renderSr(d);
+    renderIv(d);
+    renderAiSignal(d);
+    updateLog(d);
+    fetchNiftyAdvDec();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// ==================== RENDER ====================
+function renderTable(d) {
+  const wrap = document.getElementById('tableWrap');
+  const rows = d.table;
+  if (!rows || !rows.length) { wrap.innerHTML = '<div class="loading">No data</div>'; return; }
+  let maxCeMf = 0, maxPeMf = 0;
+  rows.forEach(r => {
+    const a = Math.abs(r.ce_mf || 0), b = Math.abs(r.pe_mf || 0);
+    if (a > maxCeMf) maxCeMf = a;
+    if (b > maxPeMf) maxPeMf = b;
+  });
+  const bar = (val, max) => {
+    if (!max || !val) return '';
+    const pct = Math.min(Math.abs(val) / max, 1) * 0.75 * 100;
+    const c = val > 0 ? '0,230,118' : '229,57,53';
+    const dir = val > 0 ? '90deg' : '270deg';
+    return `background:linear-gradient(${dir}, rgba(${c},0.25) 0%, rgba(${c},0.25) ${pct}%, transparent ${pct}%)`;
+  };
+  const atmIdx = rows.findIndex(r => r._atm);
+  let topIdxOi = new Set(), topIdxChg = new Set(), topIdxVol = new Set();
+  let topIdxPeOi = new Set(), topIdxPeChg = new Set(), topIdxPeVol = new Set();
+  if (atmIdx >= 0) {
+    const start = Math.max(0, atmIdx - 5), end = Math.min(rows.length, atmIdx + 6);
+    const byVal = (key) => rows.slice(start, end).map((r, i) => ({i: start + i, v: r[key] || 0})).sort((a, b) => b.v - a.v).slice(0, 3);
+    byVal('ce_oi').forEach(x => topIdxOi.add(x.i));
+    byVal('ce_chg_oi').forEach(x => topIdxChg.add(x.i));
+    byVal('ce_vol').forEach(x => topIdxVol.add(x.i));
+    byVal('pe_oi').forEach(x => topIdxPeOi.add(x.i));
+    byVal('pe_chg_oi').forEach(x => topIdxPeChg.add(x.i));
+    byVal('pe_vol').forEach(x => topIdxPeVol.add(x.i));
+  }
+  const hlRed = 'background:#e53935;color:#fff';
+  const hlGreen = 'background:#00e676;color:#fff';
+  let h = '<table><thead><tr>';
+  const headers = ['CE MF','CE Sig','CE OI','CE Chg OI','CE Vol','CE IV','CE LTP','Strike','PE LTP','PE IV','PE Vol','PE Chg OI','PE OI','PE Sig','PE MF'];
+  headers.forEach(hh => h += `<th>${hh}</th>`);
+  h += '</tr></thead><tbody>';
+  rows.forEach((r, idx) => {
+    const cls = r._atm ? 'atm' : r._near_atm ? 'near' : '';
+    const ceStyle = `style="color:${r.ce_mf > 0 ? '#00e676' : r.ce_mf < 0 ? '#e53935' : ''};${bar(r.ce_mf, maxCeMf)}"`;
+    const peStyle = `style="color:${r.pe_mf > 0 ? '#00e676' : r.pe_mf < 0 ? '#e53935' : ''};${bar(r.pe_mf, maxPeMf)}"`;
+    const oiS = topIdxOi.has(idx) ? `style="${hlRed}"` : '';
+    const chgS = topIdxChg.has(idx) ? `style="${hlRed}"` : '';
+    const volS = topIdxVol.has(idx) ? `style="${hlRed}"` : '';
+    const peOiS = topIdxPeOi.has(idx) ? `style="${hlGreen}"` : '';
+    const peChgS = topIdxPeChg.has(idx) ? `style="${hlGreen}"` : '';
+    const peVolS = topIdxPeVol.has(idx) ? `style="${hlGreen}"` : '';
+    const unC = r._unusual_ce, unP = r._unusual_pe;
+    const rowCls = (unC || unP) ? (cls + ' unusual-row') : cls;
+    h += `<tr class="${rowCls}">`;
+    h += `<td class="num" ${ceStyle}>${r.ce_mf}</td>`;
+    h += `<td class="${sigClass('ce', r.ce_sig)}">${r.ce_sig}</td>`;
+    h += `<td class="num" ${oiS}>${r.ce_oi}</td>`;
+    h += `<td class="num" ${chgS}>${r.ce_chg_oi}</td>`;
+    h += `<td class="num" ${volS}>${r.ce_vol}</td>`;
+    h += `<td class="num">${r.ce_iv}</td>`;
+    h += `<td class="num">${r.ce_ltp}</td>`;
+    h += `<td class="num">${r.strike}</td>`;
+    h += `<td class="num">${r.pe_ltp}</td>`;
+    h += `<td class="num">${r.pe_iv}</td>`;
+    h += `<td class="num" ${peVolS}>${r.pe_vol}</td>`;
+    h += `<td class="num" ${peChgS}>${r.pe_chg_oi}</td>`;
+    h += `<td class="num" ${peOiS}>${r.pe_oi}</td>`;
+    h += `<td class="${sigClass('pe', r.pe_sig)}">${r.pe_sig}</td>`;
+    h += `<td class="num" ${peStyle}>${r.pe_mf}</td>`;
+    h += '</tr>';
+  });
+  h += '</tbody></table>';
+  wrap.innerHTML = h;
+}
+
+function sigClass(side, sig) {
+  if (!sig) return '';
+  const m = { 'CALL BUY':'sig-call-buy', 'CALL SELL':'sig-call-sell',
+              'PUT BUY':'sig-put-buy', 'PUT SELL':'sig-put-sell',
+              'COVER':'sig-cover', 'UNWIND':'sig-unwind' };
+  return m[sig] || '';
+}
+
+function renderStatus(d) {
+  document.getElementById('spotVal').textContent = d.spot;
+
+  document.getElementById('vixVal').textContent = d.vix;
+  document.getElementById('mpVal').textContent = d.max_pain;
+  const pcrEl = document.getElementById('pcrVal');
+  pcrEl.textContent = d.pcr;
+  pcrEl.className = 'val ' + (d.pcr >= 1 ? 'green' : 'red');
+
+  document.getElementById('vwapVal').textContent = d.vwap != null ? d.vwap : '-';
+  const vwapCls = d.vwap_signal === 'ABOVE' ? 'green' : d.vwap_signal === 'BELOW' ? 'red' : 'spot';
+  document.getElementById('vwapVal').className = 'val ' + vwapCls;
+
+  const emaEl = document.getElementById('emaVal');
+  if (d.ema_signal) {
+    emaEl.textContent = d.ema_signal + (d.ema_cross ? ' ' + d.ema_cross : '');
+    emaEl.className = 'val ' + (d.ema_signal === 'BULLISH' ? 'green' : 'red');
+  } else {
+    emaEl.textContent = '-'; emaEl.className = 'val spot';
+  }
+
+  const stEl = document.getElementById('stVal');
+  if (d.st_signal) {
+    stEl.textContent = d.st_signal;
+    stEl.className = 'val ' + (d.st_signal === 'BULLISH' ? 'green' : 'red');
+  } else {
+    stEl.textContent = '-'; stEl.className = 'val spot';
+  }
+
+  const adxEl = document.getElementById('adxVal');
+  if (d.adx != null) {
+    adxEl.textContent = d.adx_signal;
+    adxEl.className = 'val ' + (d.adx_signal === 'UPTREND' ? 'green' : d.adx_signal === 'DOWNTREND' ? 'red' : 'spot');
+  } else {
+    adxEl.textContent = '-';
+    adxEl.className = 'val spot';
+  }
+  const aiDirEl = document.getElementById('aiDirVal');
+  const aiBiasEl = document.getElementById('aiBiasVal');
+  if (d.ai_direction) {
+    aiDirEl.textContent = d.ai_direction + ' ' + d.ai_score;
+    aiDirEl.className = 'val ' + (d.ai_direction === 'BULLISH' ? 'green' : d.ai_direction === 'BEARISH' ? 'red' : 'spot');
+  } else { aiDirEl.textContent = '-'; aiDirEl.className = 'val spot'; }
+  const fb = d.forward_bias || {};
+  if (fb.fb_direction) {
+    aiBiasEl.textContent = fb.fb_direction + ' ' + fb.fb_score;
+    aiBiasEl.className = 'val ' + (fb.fb_direction === 'BULLISH' ? 'green' : fb.fb_direction === 'BEARISH' ? 'red' : 'spot');
+  } else { aiBiasEl.textContent = '-'; aiBiasEl.className = 'val spot'; }
+  const fsEl = document.getElementById('finalSignalVal');
+  if (d.final_signal) {
+    fsEl.textContent = d.final_signal;
+    fsEl.className = 'val ' + (d.final_signal === 'BUY CALL' ? 'green' : d.final_signal === 'BUY PUT' ? 'red' : 'spot');
+  } else { fsEl.textContent = '-'; fsEl.className = 'val spot'; }
+  const x15El = document.getElementById('cross15mVal');
+  const x15 = d.crossover_15m || {};
+  if (x15.signal) {
+    x15El.textContent = x15.signal;
+    x15El.className = 'val ' + (x15.signal === 'CROSS UP' ? 'green' : 'red');
+  } else { x15El.textContent = '-'; x15El.className = 'val spot'; }
+}
+
+function renderOiBuildup(d) {
+  const oi = d.oi_buildup;
+  if (!oi || !oi.length) { document.getElementById('oiPanel').innerHTML = '<table><tr><td style="color:#666">-</td></tr></table>'; return; }
+  let h = '<table><thead><tr><th>Strike</th><th>CE ΔOI</th><th>PE ΔOI</th><th>Δ Diff</th></tr></thead><tbody>';
+  oi.forEach(r => {
+    h += `<tr><td>${r.strike}</td><td>${r.ce_chg}</td><td>${r.pe_chg}</td><td>${r.diff}</td></tr>`;
+  });
+  h += '</tbody></table>';
+  document.getElementById('oiPanel').innerHTML = h;
+}
+
+function renderSr(d) {
+  document.getElementById('srPanel').innerHTML =
+    `<table><thead><tr><th>Level</th><th>Strike</th><th>Range</th></tr></thead><tbody>
+      <tr><td style="color:#00e676;font-weight:700">Resistance</td><td>${d.sr_resistance}</td><td rowspan="2">${d.sr_range}</td></tr>
+      <tr><td style="color:#e53935;font-weight:700">Support</td><td>${d.sr_support}</td></tr>
+    </tbody></table>`;
+}
+
+function renderIv(d) {
+  const ceFix = d.fix_ce_iv || '-';
+  const peFix = d.fix_pe_iv || '-';
+  const movCe = d.mov_ce != null ? (d.mov_ce > 0 ? '+' : '') + d.mov_ce : '-';
+  const movPe = d.mov_pe != null ? (d.mov_pe > 0 ? '+' : '') + d.mov_pe : '-';
+  document.getElementById('ivPanel').innerHTML =
+    `<table><thead><tr><th>Instrument</th><th>Avg IV</th><th>Fix IV</th><th>Mov</th></tr></thead><tbody>
+      <tr><td style="color:#00e676;font-weight:700">CALL IV</td><td>${d.ce_avg_iv || '-'}</td><td>${ceFix}</td><td>${movCe}</td></tr>
+      <tr><td style="color:#e53935;font-weight:700">PUT IV</td><td>${d.pe_avg_iv || '-'}</td><td>${peFix}</td><td>${movPe}</td></tr>
+    </tbody></table>`;
+}
+
+function renderAiSignal(d) {
+  const panel = document.getElementById('aiSignalPanel');
+  if (d.ai_score == null) {
+    panel.innerHTML = '<div style="text-align:center;color:#94a3b8;padding:10px 0">Waiting for data...</div>';
+    return;
+  }
+  const s = d.ai_score;
+  const dir = d.ai_direction || 'NEUTRAL';
+  const factors = d.ai_factors || [];
+  const fb = d.forward_bias || {};
+  const fbScore = fb.fb_score;
+  const fbDir = fb.fb_direction || 'NEUTRAL';
+  const fbFactors = fb.fb_factors || [];
+
+  const dc = dir === 'BULLISH' ? '#10b981' : dir === 'BEARISH' ? '#ef4444' : '#f59e0b';
+  const db = dir === 'BULLISH' ? '#d1fae5' : dir === 'BEARISH' ? '#fee2e2' : '#fef3c7';
+  const fdc = fbDir === 'BULLISH' ? '#10b981' : fbDir === 'BEARISH' ? '#ef4444' : '#f59e0b';
+  const fdb = fbDir === 'BULLISH' ? '#d1fae5' : fbDir === 'BEARISH' ? '#fee2e2' : '#fef3c7';
+  const bc = s >= 65 ? '#10b981' : s >= 45 ? '#f59e0b' : '#ef4444';
+  const fbc = fbScore >= 65 ? '#10b981' : fbScore >= 45 ? '#f59e0b' : '#ef4444';
+
+  // Sentiment row (always visible)
+  let h = `<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+    <div style="font-size:9px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.3px">NOW</div>
+    <div style="flex:1;background:${db};color:${dc};padding:2px 10px;border-radius:6px;font-weight:800;font-size:14px;text-align:center">${dir}</div>
+    <div style="font-weight:800;font-size:18px;color:${dc}">${s}</div>
+  </div>`;
+  h += `<div style="height:3px;background:#e2e8f0;border-radius:2px;margin:2px 0 6px;overflow:hidden">
+    <div style="height:100%;width:${s}%;background:${bc};border-radius:2px;transition:width .5s"></div>
+  </div>`;
+
+  // Forward Bias (if we have history)
+  if (fbScore != null) {
+    h += `<div style="display:flex;align-items:center;gap:6px;margin:5px 0 3px;padding-top:5px;border-top:1px dashed #e2e8f0">
+      <div style="font-size:9px;font-weight:700;color:#6366f1;text-transform:uppercase;letter-spacing:0.3px">BIAS</div>
+      <div style="flex:1;background:${fdb};color:${fdc};padding:2px 10px;border-radius:6px;font-weight:800;font-size:14px;text-align:center">${fbDir}</div>
+      <div style="font-weight:800;font-size:18px;color:${fdc}">${fbScore}</div>
+    </div>`;
+    h += `<div style="height:3px;background:#e2e8f0;border-radius:2px;margin:2px 0 5px;overflow:hidden">
+      <div style="height:100%;width:${fbScore}%;background:${fbc};border-radius:2px;transition:width .5s"></div>
+    </div>`;
+    if (fbFactors.length) {
+      h += '<div style="font-size:8px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.2px;margin-bottom:2px">Bias Drivers</div>';
+      h += '<div style="display:flex;flex-wrap:wrap;gap:2px">';
+      fbFactors.forEach(f => {
+        const c = f.i === 'BULLISH' ? '#065f46' : f.i === 'BEARISH' ? '#991b1b' : '#92400e';
+        const bg = f.i === 'BULLISH' ? '#d1fae5' : f.i === 'BEARISH' ? '#fee2e2' : '#fef3c7';
+        h += `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:${bg};color:${c};font-weight:600" title="${f.d||f.f}">${f.f}</span>`;
+      });
+      h += '</div>';
+    }
+  }
+
+  // Current factors (compact)
+  if (factors.length) {
+    h += '<div style="font-size:8px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:0.2px;margin:4px 0 2px">Sentiment Factors</div>';
+    h += '<div style="display:flex;flex-wrap:wrap;gap:2px">';
+    factors.forEach(f => {
+      const c = f.i === 'BULLISH' ? '#065f46' : f.i === 'BEARISH' ? '#991b1b' : '#92400e';
+      const bg = f.i === 'BULLISH' ? '#d1fae5' : f.i === 'BEARISH' ? '#fee2e2' : '#fef3c7';
+      h += `<span style="font-size:8px;padding:1px 4px;border-radius:3px;background:${bg};color:${c};font-weight:600">${f.f}</span>`;
+    });
+    h += '</div>';
+  }
+
+  panel.innerHTML = h;
+}
+
+function setIvFix() {
+  fetch('/api/iv-fix', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ce_iv: lastData.ce_avg_iv, pe_iv: lastData.pe_avg_iv})
+  }).then(() => fetchData());
+}
+
+function getLog() {
+  try { return JSON.parse(sessionStorage.getItem('dataLog') || '[]'); } catch { return []; }
+}
+function setLog(arr) {
+  sessionStorage.setItem('dataLog', JSON.stringify(arr));
+  let h = '<table><thead><tr><th>Time</th><th>Spot</th><th>VIX</th><th>MaxPain</th><th>PCR</th><th>Range</th></tr></thead><tbody>';
+  arr.forEach(r => h += `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`);
+  h += '</tbody></table>';
+  document.querySelector('#logWrap').innerHTML = h;
+}
+function updateLog(d) {
+  const now = Date.now();
+  if (now - lastLogTime < 120000) return;
+  lastLogTime = now;
+  const t = new Date().toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+  const log = getLog();
+  log.unshift([t, d.spot, d.vix, d.max_pain, d.pcr, d.sr_range]);
+  if (log.length > 20) log.length = 20;
+  setLog(log);
+}
+
+// restore log on page load
+setLog(getLog());
+
+// ==================== EVENTS ====================
+document.getElementById('modeBtn').addEventListener('click', async function() {
+  state.mode = this.textContent === 'Index' ? 'Stock' : 'Index';
+  this.textContent = state.mode;
+  document.getElementById('indexSel').disabled = state.mode !== 'Index';
+  document.getElementById('stockSel').disabled = state.mode !== 'Stock';
+  await fetchDates();
+  apply();
+});
+
+async function onSymbolChange() {
+  try { await fetchDates(); } catch(e) { console.error('fetchDates:', e); }
+  apply();
+}
+document.getElementById('indexSel').addEventListener('change', onSymbolChange);
+document.getElementById('stockSel').addEventListener('change', onSymbolChange);
+document.getElementById('applyBtn').addEventListener('click', apply);
+document.getElementById('refreshBtn').addEventListener('click', async function() {
+  await fetchDates();
+  await detectAtmStrike();
+  if (state.expiry && parseInt(document.getElementById('strikeInput').value)) fetchData();
+});
+document.getElementById('strikeInput').addEventListener('keydown', e => { if (e.key==='Enter') apply(); });
+document.getElementById('expirySel').addEventListener('change', async function() {
+  state.expiry = this.value;
+  let sp = parseInt(document.getElementById('strikeInput').value);
+  if (!sp) await detectAtmStrike();
+  if (state.expiry && parseInt(document.getElementById('strikeInput').value)) {
+    if (state.timerId) { clearTimeout(state.timerId); state.timerId = null; }
+    fetchData().then(() => scheduleNext());
+  }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (giftIntervalId) { clearInterval(giftIntervalId); giftIntervalId = null; }
+  } else {
+    if (!giftIntervalId) giftIntervalId = setInterval(fetchGiftNifty, 10000);
+    fetchGiftNifty();
+    if (lastFetchTime) {
+      if (state.timerId) { clearTimeout(state.timerId); state.timerId = null; }
+      fetchData().then(() => { scheduleNext(); startBgInterval(); });
+    }
+  }
+});
+</script>
+</body>
+</html>

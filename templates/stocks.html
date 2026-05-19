@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>All Stocks - NSE Option Chain Analyzer</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter','Segoe UI',sans-serif;background:#f8fafc;color:#1e293b;font-size:13px;overflow:hidden;height:100vh}
+.app{display:flex;flex-direction:column;height:100vh;padding:5px 6px;gap:4px;margin-left:200px}
+@media(max-width:768px){.app{margin-left:0}}
+.hamburger{background:none;border:none;cursor:pointer;font-size:18px;color:#64748b;padding:2px 8px;border-radius:6px;transition:all .2s;display:none;align-items:center}
+.hamburger:hover{background:#f1f5f9;color:#1e293b}
+.hamburger.show{display:flex}
+.overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.35);z-index:99}
+.overlay.show{display:block}
+.sidebar{position:fixed;top:0;left:0;width:200px;height:100%;background:#fff;z-index:100;padding:0;display:flex;flex-direction:column;transition:left .25s ease;box-shadow:2px 0 15px rgba(0,0,0,0.1)}
+@media(max-width:768px){.sidebar{left:-210px}.sidebar.open{left:0}}
+.sidebar .head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid #e2e8f0}
+.sidebar .head span{font-weight:700;font-size:14px;color:#1e293b}
+.sidebar .head button{background:none;border:none;font-size:16px;color:#64748b;cursor:pointer;padding:2px 6px;border-radius:6px}
+.sidebar .head button:hover{background:#f1f5f9}
+.sidebar a{display:flex;align-items:center;gap:10px;padding:12px 16px;color:#475569;text-decoration:none;font-size:13px;font-weight:500;border-left:3px solid transparent;transition:all .15s}
+.sidebar a:hover{background:#f8fafc;color:#6366f1;border-left-color:#6366f1}
+.sidebar a.active{background:#eef2ff;color:#6366f1;border-left-color:#6366f1;font-weight:600}
+.sidebar a .icon{font-size:16px;width:20px;text-align:center}
+.top-bar{display:flex;align-items:center;gap:5px;background:#fff;padding:6px 12px;border-radius:10px;border:1px solid #e2e8f0;flex-wrap:wrap}
+.idx-filter{background:#f1f5f9;border:none;padding:5px 8px;border-radius:6px;font-size:12px;outline:none;font-family:'Inter',sans-serif;color:#1e293b;cursor:pointer;max-width:140px;transition:all .2s}
+.idx-filter:focus{background:#fff;box-shadow:0 0 0 2px rgba(99,102,241,0.15)}
+.top-bar .clock{margin-left:auto;font-size:13px;color:#94a3b8}
+.search-bar{background:#f1f5f9;border:none;padding:5px 10px;border-radius:6px;font-size:12px;outline:none;width:200px;font-family:'Inter',sans-serif;color:#1e293b;transition:all .2s}
+.search-bar:focus{background:#fff;box-shadow:0 0 0 2px rgba(99,102,241,0.15)}
+.search-bar::placeholder{color:#94a3b8}
+.count{color:#94a3b8;font-size:12px;margin-left:8px}
+.scroll{flex:1;overflow:auto;padding:4px 0}
+.scroll::-webkit-scrollbar{width:5px}
+.scroll::-webkit-scrollbar-thumb{background:#cbd5e1;border-radius:10px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+thead{position:sticky;top:0;z-index:2}
+th{background:#f1f5f9;color:#475569;font-weight:600;padding:6px 8px;text-align:left;border-bottom:1px solid #e2e8f0;white-space:nowrap;font-size:11px;text-transform:uppercase;letter-spacing:0.3px}
+td{padding:5px 8px;border-bottom:1px solid #f1f5f9;white-space:nowrap}
+tr:hover td{background:#f8fafc}
+tr:nth-child(even) td{background:#fafbfc}
+tr:nth-child(even):hover td{background:#f1f5f9}
+tr td:first-child{font-weight:700;color:#1e293b}
+.chg{font-weight:600;font-variant-numeric:tabular-nums}
+.pct{padding:2px 7px;border-radius:5px;font-weight:700;font-variant-numeric:tabular-nums}
+.pct.green{background:#dcfce7;color:#166534}
+.pct.red{background:#fce4ec;color:#c62828}
+.panel-wrap{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap}
+.panel{background:#fff;border-radius:10px;border:1px solid #e2e8f0;padding:8px 10px;flex:1;min-width:200px}
+.panel .title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;color:#64748b;margin-bottom:4px}
+.panel .item{display:flex;justify-content:space-between;align-items:center;padding:3px 0;border-bottom:1px solid #f1f5f9;font-size:12px}
+.panel .item:last-child{border-bottom:none}
+.panel .sym{font-weight:600;color:#1e293b}
+.panel .val{font-weight:600}
+.tabs{display:flex;gap:4px;margin-bottom:4px}
+.tab{background:#f1f5f9;border:none;padding:4px 12px;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;color:#64748b;font-family:inherit;transition:all .15s}
+.tab.active{background:#6366f1;color:#fff}
+.tab:hover:not(.active){background:#e2e8f0}
+@media(max-width:768px){
+body{overflow:auto;height:auto}
+.app{height:auto;padding:4px;gap:4px}
+.search-bar{width:140px}
+.panel-wrap{flex-direction:column}
+.panel{min-width:auto}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="overlay" id="overlay"></div>
+  <div class="sidebar" id="sidebar">
+    <div class="head"><span>Navigation</span><button id="closeBtn">✕</button></div>
+    <a href="/" id="linkDash"><span class="icon">📈</span>Dashboard</a>
+    <a href="/prochain" id="linkPro"><span class="icon">📊</span>Pro Option Chain</a>
+    <a href="/indices" id="linkIndices"><span class="icon">📋</span>Indices</a>
+    <a href="/stocks" class="active" id="linkStocks"><span class="icon">💹</span>Stocks</a>
+    <a href="/adv-scan" id="linkAdvScan"><span class="icon">🔍</span>Adv Scan</a>
+  </div>
+  <div class="top-bar">
+    <button class="hamburger" id="hamburgerBtn">☰</button>
+    <span style="font-weight:700;color:#1e293b;font-size:13px">All Stocks (NIFTY 500)</span>
+    <input class="search-bar" id="searchInput" placeholder="Search stocks..." autofocus>
+    <select class="idx-filter" id="indexFilter"><option value="all">All Indices</option></select>
+    <span class="count" id="countDisplay"></span>
+    <span class="clock" id="clockDisplay"></span>
+  </div>
+  <div class="panel-wrap" id="glPanel">
+    <div class="panel" id="gainersPanel">
+      <div class="title" style="color:#166534">▲ Top Gainers</div>
+      <div id="gainersList"><div style="color:#94a3b8;font-size:12px">Loading...</div></div>
+    </div>
+    <div class="panel" id="losersPanel">
+      <div class="title" style="color:#c62828">▼ Top Losers</div>
+      <div id="losersList"><div style="color:#94a3b8;font-size:12px">Loading...</div></div>
+    </div>
+  </div>
+  <div class="tabs">
+    <button class="tab active" data-filter="all">All</button>
+    <button class="tab" data-filter="gainers">Gainers</button>
+    <button class="tab" data-filter="losers">Losers</button>
+  </div>
+  <div class="scroll" id="scrollWrap">
+    <div style="display:flex;align-items:center;justify-content:center;height:200px;color:#64748b;font-weight:500;font-size:14px" id="loadingMsg">Loading stocks...</div>
+    <table id="stockTable">
+      <thead><tr>
+        <th>Symbol</th>
+        <th style="text-align:right">LTP</th>
+        <th style="text-align:right">Change</th>
+        <th style="text-align:right">% Change</th>
+        <th style="text-align:right">Open</th>
+        <th style="text-align:right">High</th>
+        <th style="text-align:right">Low</th>
+        <th style="text-align:right">Prev Close</th>
+        <th>Index</th>
+      </tr></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('overlay');
+const app = document.querySelector('.app');
+const hamburger = document.getElementById('hamburgerBtn');
+function isMobile() { return window.innerWidth <= 768; }
+function toggleSidebar(open) {
+  if (!isMobile()) return;
+  sidebar.classList.toggle('open', open);
+  overlay.classList.toggle('show', open);
+  hamburger.classList.toggle('show', !open);
+}
+hamburger.addEventListener('click', () => toggleSidebar(!sidebar.classList.contains('open')));
+function closeSidebar() { toggleSidebar(false); }
+document.getElementById('closeBtn').addEventListener('click', closeSidebar);
+overlay.addEventListener('click', closeSidebar);
+['linkDash','linkPro','linkIndices','linkStocks','linkAdvScan'].forEach(id => {
+  document.getElementById(id).addEventListener('click', e => {
+    if (isMobile()) closeSidebar();
+    document.querySelectorAll('.sidebar a').forEach(a => a.classList.remove('active'));
+    e.currentTarget.classList.add('active');
+  });
+});
+if (isMobile()) hamburger.classList.add('show');
+window.addEventListener('resize', () => {
+  if (isMobile()) hamburger.classList.add('show');
+  else { hamburger.classList.remove('show'); sidebar.classList.remove('open'); overlay.classList.remove('show'); }
+});
+
+function updateClock() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  document.getElementById('clockDisplay').textContent =
+    `${pad(d.getDate())}-${months[d.getMonth()]}-${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+let allStocks = [];
+let filterText = '';
+let filterType = 'all';
+let filterIndex = 'all';
+
+function fmt(v) {
+  if (v == null || v === '-') return '-';
+  return Number(v).toLocaleString('en-IN', {minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', function() {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    this.classList.add('active');
+    filterType = this.dataset.filter;
+    render();
+  });
+});
+
+document.getElementById('indexFilter').addEventListener('change', function() {
+  filterIndex = this.value;
+  render();
+});
+
+async function fetchStocks() {
+  try {
+    const r = await fetch('/api/stocks');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data.stocks) return;
+    allStocks = data.stocks;
+    document.getElementById('loadingMsg').style.display = 'none';
+    renderGainersLosers(data.gainers, data.losers);
+    render();
+  } catch(e) {}
+}
+
+function renderGainersLosers(gainers, losers) {
+  const gList = document.getElementById('gainersList');
+  gList.innerHTML = gainers.map(s => {
+    const pct = s.pChange || 0;
+    return `<div class="item"><span class="sym">${s.symbol}</span><span class="val" style="color:#166534">+${Number(pct).toFixed(2)}%</span></div>`;
+  }).join('');
+
+  const lList = document.getElementById('losersList');
+  lList.innerHTML = losers.map(s => {
+    const pct = s.pChange || 0;
+    return `<div class="item"><span class="sym">${s.symbol}</span><span class="val" style="color:#c62828">${Number(pct).toFixed(2)}%</span></div>`;
+  }).join('');
+}
+
+function render() {
+  const q = filterText.toLowerCase();
+  let filtered = q ? allStocks.filter(s => s.symbol.toLowerCase().includes(q)) : allStocks;
+  if (filterType === 'gainers') {
+    filtered = filtered.filter(s => (s.pChange || 0) > 0);
+  } else if (filterType === 'losers') {
+    filtered = filtered.filter(s => (s.pChange || 0) < 0);
+  }
+  if (filterIndex !== 'all') {
+    filtered = filtered.filter(s => (s.indexTags || []).includes(filterIndex));
+  }
+  document.getElementById('countDisplay').textContent = `${filtered.length} / ${allStocks.length}`;
+  const tbody = document.getElementById('tableBody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:40px;color:#94a3b8;font-size:14px">No matching stocks</td></tr>';
+    return;
+  }
+  tbody.innerHTML = filtered.map(s => {
+    const chg = s.change || 0;
+    const pct = s.pChange || 0;
+    const cls = chg >= 0 ? 'green' : 'red';
+    const sign = chg > 0 ? '+' : '';
+    const tags = s.indexTags || [];
+    const tag = tags.length ? tags[0] : '';
+    return `<tr>
+      <td>${s.symbol}</td>
+      <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">${fmt(s.lastPrice)}</td>
+      <td style="text-align:right;color:${chg >= 0 ? '#166534' : '#c62828'}"><span class="chg">${sign}${fmt(chg)}</span></td>
+      <td style="text-align:right"><span class="pct ${cls}">${sign}${Number(pct).toFixed(2)}%</span></td>
+      <td style="text-align:right;color:#64748b">${fmt(s.open)}</td>
+      <td style="text-align:right;color:#64748b">${fmt(s.dayHigh)}</td>
+      <td style="text-align:right;color:#64748b">${fmt(s.dayLow)}</td>
+      <td style="text-align:right;color:#64748b">${fmt(s.previousClose)}</td>
+      <td style="color:#94a3b8;font-size:11px">${tag}</td>
+    </tr>`;
+  }).join('');
+}
+
+document.getElementById('searchInput').addEventListener('input', e => {
+  filterText = e.target.value;
+  render();
+});
+
+async function fetchIndexTags() {
+  try {
+    const r = await fetch('/api/index-tags');
+    if (!r.ok) return;
+    const data = await r.json();
+    if (!data.indices) return;
+    const sel = document.getElementById('indexFilter');
+    data.indices.forEach(tag => {
+      const opt = document.createElement('option');
+      opt.value = tag;
+      opt.textContent = tag;
+      sel.appendChild(opt);
+    });
+  } catch(e) {}
+}
+
+fetchIndexTags();
+fetchStocks();
+setInterval(fetchStocks, 30000);
+</script>
+</body>
+</html>
